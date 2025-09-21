@@ -1,0 +1,662 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GasEng-PMT  Gas Engineering Project Management Tool</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="index.css">
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div class="title-container">
+                <h1>GasEng-PMT  Gas Engineering Project Management Tool</h1>
+                <p class="subtitle">Written by Tim Bickford - Rev 1.0 Beta</p>
+            </div>
+            <div id="notification-container" class="notification-container">
+                <button id="notification-bell" aria-label="Notifications" data-tooltip="Show recent notifications for overdue and upcoming tasks.">
+                    &#128276;
+                    <span id="notification-count" class="notification-count" style="display: none;"></span>
+                </button>
+                <div id="notification-panel" class="notification-panel" style="display: none;">
+                    <h3>Notifications</h3>
+                    <ul id="notification-list"></ul>
+                </div>
+            </div>
+        </header>
+
+        <nav class="tab-navigation">
+            <button class="tab-btn active" data-tab="plan">Project Plan</button>
+            <button class="tab-btn" data-tab="instructions">Instructions</button>
+            <button class="tab-btn" data-tab="report">Report</button>
+            <button class="tab-btn" data-tab="minutes">Meeting Minutes</button>
+            <button class="tab-btn" data-tab="action-items">Action Items</button>
+            <button class="tab-btn" data-tab="previous-reports">Previous Reports</button>
+        </nav>
+
+        <div id="gantt-view-container" class="tab-content">
+            <details class="project-info-section" open>
+                <summary>Project Information</summary>
+                <div id="project-info-form" class="project-info-form">
+                    <div class="form-group form-group-full">
+                        <label for="project-name">Project Name</label>
+                        <input type="text" id="project-name" placeholder="Enter project name">
+                    </div>
+                    <div class="form-group">
+                        <label for="project-owner">Project Owner</label>
+                        <input type="text" id="project-owner" placeholder="Enter owner's name">
+                    </div>
+                    <div class="form-group">
+                        <label for="project-engineering-manager">Engineering Manager</label>
+                        <input type="text" id="project-engineering-manager" placeholder="Enter engineering manager's name">
+                    </div>
+                    <div class="form-group">
+                        <label for="project-manager">Project Manager</label>
+                        <input type="text" id="project-manager" placeholder="Enter manager's name">
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="project-engineers">Project Engineer(s)</label>
+                        <input type="text" id="project-engineers" placeholder="Enter engineer names (comma-separated)">
+                    </div>
+                     <div class="form-group form-group-full">
+                        <label for="project-description">Project Description</label>
+                        <textarea id="project-description" rows="3" placeholder="Enter a detailed project description..."></textarea>
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="project-deliverables">Project Deliverables</label>
+                        <textarea id="project-deliverables" rows="3" placeholder="List the key project deliverables, one per line..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="project-location">Project Location</label>
+                        <input type="text" id="project-location" placeholder="e.g., City, State">
+                    </div>
+                    <div class="form-group">
+                        <label for="project-doc">Project DOC</label>
+                        <select id="project-doc">
+                            <option value="">Select DOC</option>
+                            <option value="BNG">BNG</option>
+                            <option value="MNG">MNG</option>
+                            <option value="NH-ME">NH-ME</option>
+                            <option value="NU-NH">NU-NH</option>
+                            <option value="FG&E">FG&E</option>
+                            <option value="GSGT">GSGT</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="project-start-date">Project Start Date</label>
+                        <input type="date" id="project-start-date" placeholder="Select start date...">
+                    </div>
+                    <div class="form-group">
+                        <label for="project-end-date">Project End Date</label>
+                        <input type="date" id="project-end-date" placeholder="Select end date...">
+                    </div>
+                    <div class="form-group">
+                        <label for="project-budget">Project Budget</label>
+                        <input type="number" id="project-budget" placeholder="e.g., 50000" min="0">
+                    </div>
+                     <div class="form-group">
+                        <label for="project-currency">Currency</label>
+                        <input type="text" id="project-currency" placeholder="e.g., USD" value="USD">
+                    </div>
+                </div>
+            </details>
+            <main>
+                <div class="gantt-container">
+                    <div class="gantt-controls">
+                        <div class="control-group">
+                            <h2>Timeline View</h2>
+                            <div class="view-switcher" id="view-switcher">
+                                <button class="view-btn active" data-view="day" data-tooltip="View timeline by day">Day</button>
+                                <button class="view-btn" data-view="week" data-tooltip="View timeline by week">Week</button>
+                                <button class="view-btn" data-view="month" data-tooltip="View timeline by month">Month</button>
+                                <button class="view-btn" data-view="quarter" data-tooltip="View timeline by quarter">Quarter</button>
+                                <button class="view-btn" data-view="year" data-tooltip="View timeline by year">Year</button>
+                            </div>
+                        </div>
+                         <div class="control-group">
+                            <h2>Project Control</h2>
+                            <div class="baseline-controls">
+                                <button id="set-baseline-btn" data-tooltip="Save a snapshot of the current schedule to track variances.">Set Baseline</button>
+                                 <div class="toggle-switch" data-tooltip="Overlay the saved baseline on the chart for comparison.">
+                                    <input type="checkbox" id="show-baseline-toggle">
+                                    <label for="show-baseline-toggle">Show Baseline</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <h2>Color Scheme</h2>
+                            <div class="color-coding-controls">
+                                 <label for="color-code-by">Color-Code By</label>
+                                <select id="color-code-by"></select>
+                            </div>
+                            <div id="gantt-legend" class="gantt-legend"></div>
+                        </div>
+                         <div class="control-group">
+                            <h2>Project Data</h2>
+                             <div class="data-controls">
+                                <button id="new-project-btn" class="export-btn" data-tooltip="Clear the current project and start a new one.">New Project</button>
+                                <button id="save-project-btn" class="export-btn" data-tooltip="Save all project data to a local JSON file.">Save Project</button>
+                                <input type="file" id="load-project-input" accept=".json" style="display:none;">
+                                <label for="load-project-input" id="load-project-label" class="export-btn" data-tooltip="Load a project from a local JSON file.">Load Project</label>
+                            </div>
+                        </div>
+                         <div class="control-group">
+                            <h2>Export</h2>
+                            <div class="export-controls">
+                                <button id="export-csv-btn" class="export-btn" data-tooltip="Export tasks to a CSV file.">CSV</button>
+                                <button id="export-pdf-chart-btn" class="export-btn" data-tooltip="Export the Gantt chart view as a PDF document.">PDF Chart</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="control-group-full-width">
+                        <div class="zoom-controls">
+                            <label for="zoom-slider">Timeline Zoom</label>
+                            <input type="range" id="zoom-slider" min="10" max="150" value="50">
+                            <span id="zoom-value">50px</span>
+                        </div>
+                    </div>
+                    <div class="gantt-scroll-wrapper">
+                        <div id="gantt-chart" class="gantt-chart-area" aria-label="Gantt Chart Area">
+                            <svg id="dependency-lines" class="dependency-lines-svg"></svg>
+                            <div class="gantt-empty-state">
+                                <p>Add tasks below to get started.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="task-manager">
+                    <div class="task-manager-header">
+                        <h2>Tasks</h2>
+                    </div>
+                     <form id="add-task-form" aria-labelledby="add-task-heading">
+                        <div class="form-group form-group-full">
+                            <label for="task-name-input">Task Name</label>
+                            <input type="text" id="task-name-input" placeholder="Enter new task or sub-task name" required>
+                        </div>
+                        <div class="form-group form-group-full">
+                            <label for="parent-task-select">Parent Task / Category</label>
+                            <select id="parent-task-select">
+                                <option value="">None (Creates a New Main Task)</option>
+                            </select>
+                        </div>
+                        <div id="subtask-fields-container" class="subtask-fields">
+                             <div class="form-group">
+                                <label for="start-date-input">Start Date</label>
+                                <input type="date" id="start-date-input" required aria-label="Start Date" placeholder="Select start date...">
+                            </div>
+                             <div class="form-group">
+                                <label for="end-date-input">End Date</label>
+                                <input type="date" id="end-date-input" required aria-label="End Date" placeholder="Select end date...">
+                            </div>
+                            <div class="form-group form-group-small">
+                                <label for="percent-complete-input">% Complete</label>
+                                <input type="number" id="percent-complete-input" min="0" max="100" value="0" required aria-label="Percentage Complete">
+                            </div>
+                             <div class="form-group form-group-large">
+                                <label for="resources-input">Resources</label>
+                                <input type="text" id="resources-input" placeholder="e.g. John, Server A">
+                            </div>
+                            <div id="add-custom-fields-container" class="custom-fields-container form-group-full"></div>
+                        </div>
+                        <button type="submit">Add</button>
+                    </form>
+    
+                    <div class="task-controls">
+                        <div class="filter-sort-controls">
+                            <div class="form-group">
+                                <label for="filter-name">Filter by Name</label>
+                                <input type="text" id="filter-name" placeholder="Task name...">
+                            </div>
+                            <div class="form-group">
+                                <label for="filter-resource">Filter by Resource</label>
+                                <input type="text" id="filter-resource" placeholder="Resource name...">
+                            </div>
+                             <div class="form-group">
+                                <label for="filter-status">Filter by Status</label>
+                                <select id="filter-status">
+                                    <option value="">All Statuses</option>
+                                    <option value="On Track">On Track</option>
+                                    <option value="At Risk">At Risk</option>
+                                    <option value="Delayed">Delayed</option>
+                                    <option value="Complete">Complete</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                 <label for="sort-tasks">Sort by</label>
+                                <select id="sort-tasks">
+                                    <option value="startDate-asc">Start Date (Asc)</option>
+                                    <option value="startDate-desc">Start Date (Desc)</option>
+                                    <option value="endDate-asc">End Date (Asc)</option>
+                                    <option value="endDate-desc">End Date (Desc)</option>
+                                    <option value="name-asc">Name (A-Z)</option>
+                                    <option value="name-desc">Name (Z-A)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="custom-field-controls">
+                            <button id="manage-custom-fields-btn" data-tooltip="Add or remove custom data fields for your tasks.">Manage Custom Fields</button>
+                        </div>
+                    </div>
+    
+                    <ul id="task-list" aria-live="polite"></ul>
+                </div>
+            </main>
+        </div>
+
+        <div id="instructions-page" class="tab-content" style="display: none;">
+            <div class="instructions-content">
+                <h2>How to Use GasEng-PMT</h2>
+                <p>Welcome to the Gas Engineering Project Management Tool (GasEng-PMT). Here’s a quick guide to its features:</p>
+
+                <h3>1. Project Information</h3>
+                <p>Start by filling out the details in the <strong>Project Information</strong> section. This information will be saved with your project and used in the report.</p>
+
+                <h3>2. Adding and Managing Tasks</h3>
+                <ul>
+                    <li><strong>Add a Main Task:</strong> In the "Tasks" section, enter a name for your task and ensure the "Parent Task / Category" dropdown is set to "None". Click "Add". This creates a summary task container.</li>
+                    <li><strong>Add a Sub-task:</strong> Enter a name for the sub-task, then select the appropriate main task from the "Parent Task / Category" dropdown. Fill in the start date, end date, and other details for this specific piece of work.</li>
+                    <li><strong>Automatic Timelines:</strong> Main tasks do not have their own dates. Their timeline on the Gantt chart is automatically calculated to start at the earliest sub-task's start date and end at the latest sub-task's end date.</li>
+                    <li><strong>Add Multiple Sub-tasks:</strong> In the task list, click the "Add Sub-tasks" button on any task to open a panel where you can paste a list of sub-tasks. Each line will be created as a new child task.</li>
+                    <li><strong>Edit a Task:</strong> Click the "Edit" button on any task in the list, or simply double-click the task in either the list or the Gantt chart. You cannot edit the dates of a main task directly.</li>
+                </ul>
+
+                <h3>3. Using the Gantt Timeline</h3>
+                <ul>
+                    <li><strong>Navigate:</strong> Use the Day, Week, Month, Quarter, and Year buttons to change the timeline view. Use the zoom slider to adjust the column widths for more or less detail.</li>
+                    <li><strong>Move a Sub-task:</strong> Click and drag any sub-task bar horizontally to reschedule it. Main task bars cannot be moved directly.</li>
+                    <li><strong>Resize a Sub-task:</strong> Hover over the left or right edge of a sub-task bar and drag the handle to change its duration.</li>
+                    <li><strong>Dependencies:</strong> In the "Edit Task" modal, you can select other tasks as dependencies. A line will appear on the chart, and if the predecessor task's date changes, this task will automatically be rescheduled.</li>
+                </ul>
+
+                <h3>4. Filtering, Sorting, and Customization</h3>
+                <ul>
+                    <li><strong>Filter & Sort:</strong> Use the controls above the task list to filter by name, resource, or status, and to sort the list by different criteria.</li>
+                    <li><strong>Baselines:</strong> Click "Set Baseline" to save a snapshot of your current schedule. You can then toggle "Show Baseline" to see how your project's timing has changed.</li>
+                    <li><strong>Color Coding:</strong> Use the "Color-Code By" dropdown to change how task bars in the Gantt chart are colored. You can color them by status, resource, or any custom field you create.</li>
+                    <li><strong>Custom Fields:</strong> Click "Manage Custom Fields" to add your own data fields to tasks, such as a Ticket ID, Priority, or Cost Center.</li>
+                </ul>
+
+                <h3>5. Saving, Loading & Exporting</h3>
+                <ul>
+                    <li><strong>Save/Load:</strong> Use the "Save Project" and "Load Project" buttons to save your entire project (tasks, dependencies, project info) to a file on your computer and load it back later.</li>
+                    <li><strong>Export:</strong> You can export your task data to a CSV file or export the visual Gantt chart to a high-quality PDF.</li>
+                </ul>
+
+                <h3>6. Reports, Minutes & Action Items</h3>
+                <ul>
+                    <li><strong>Reports:</strong> Navigate to the <strong>Report</strong> tab to see a comprehensive summary of your project. This report includes a timestamp of when it was generated and can be exported to a PDF.</li>
+                    <li><strong>Meeting Minutes:</strong> Use the <strong>Meeting Minutes</strong> tab to log notes from meetings. These minutes are saved with your project and will be automatically included in chronological order at the end of the project report.</li>
+                    <li><strong>Action Items:</strong> Use the <strong>Action Items</strong> tab to track tasks and follow-ups. These items are saved with your project and included in a dedicated section in the reports.</li>
+                    <li><strong>Previous Reports:</strong> The new <strong>Previous Reports</strong> tab automatically saves a snapshot of your report every time you click "Export to PDF". You can view and delete these historical reports.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="report-page" class="tab-content" style="display: none;">
+            <div class="report-header">
+                <div class="report-header-text">
+                    <h2>Project Status Report</h2>
+                    <p class="report-timestamp">Generated on: <span id="report-timestamp"></span></p>
+                </div>
+                <div class="report-actions">
+                    <button id="export-pdf-btn">Export to PDF</button>
+                </div>
+            </div>
+            <div id="report-content">
+                 <!-- Project Summary -->
+                <div class="report-section report-project-summary">
+                    <h3 id="report-project-name">Project Name</h3>
+                    
+                    <div class="report-section-subheading">Project Description</div>
+                    <div id="report-project-description" class="report-multiline-text">N/A</div>
+
+                    <div class="report-section-subheading">Project Deliverables</div>
+                    <div id="report-project-deliverables" class="report-multiline-text">N/A</div>
+                    
+                    <div class="report-summary-grid">
+                        <div><strong>Owner:</strong> <span id="report-project-owner"></span></div>
+                        <div><strong>Engineering Manager:</strong> <span id="report-project-engineering-manager"></span></div>
+                        <div><strong>Project Manager:</strong> <span id="report-project-manager"></span></div>
+                        <div><strong>Start Date:</strong> <span id="report-project-start-date"></span></div>
+                        <div><strong>End Date:</strong> <span id="report-project-end-date"></span></div>
+                        <div><strong>Location:</strong> <span id="report-project-location"></span></div>
+                        <div><strong>DOC:</strong> <span id="report-project-doc"></span></div>
+                        <div class="report-summary-full"><strong>Engineer(s):</strong> <span id="report-project-engineers"></span></div>
+                        <div class="report-summary-full"><strong>Budget:</strong> <span id="report-project-budget"></span></div>
+                    </div>
+                </div>
+
+                <!-- Written Summary -->
+                <div class="report-section" id="report-written-summary-section">
+                    <h3>Written Summary</h3>
+                    <p class="report-summary-instructions">Provide a brief narrative summary of the project's status, highlighting key achievements, risks, and next steps. This will be included in the PDF export.</p>
+                    <textarea id="report-written-summary-textarea" rows="8" placeholder="Enter summary here..."></textarea>
+                    <div class="report-section-actions">
+                        <button id="save-to-archive-btn" class="save-btn">Save to Archive</button>
+                    </div>
+                </div>
+                
+                <!-- Overall Progress -->
+                <div class="report-section" id="report-overall-progress">
+                    <h3>Overall Progress</h3>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill"></div>
+                    </div>
+                    <span class="progress-bar-label">0%</span>
+                </div>
+        
+                <!-- At-Risk & Overdue -->
+                <div class="report-section" id="report-at-risk">
+                     <h3>At-Risk & Overdue Tasks</h3>
+                     <ul class="report-task-list"><li>No at-risk or overdue tasks.</li></ul>
+                </div>
+        
+                <!-- Upcoming Deadlines -->
+                <div class="report-section" id="report-upcoming">
+                    <h3>Upcoming Deadlines (Next <input type="number" id="upcoming-days-input" value="7" min="1"> days)</h3>
+                    <ul class="report-task-list"><li>No upcoming deadlines in this period.</li></ul>
+                </div>
+                
+                <!-- Milestones -->
+                <div class="report-section" id="report-milestones">
+                    <h3>Key Milestones</h3>
+                    <ul class="report-task-list"><li>No milestones defined.</li></ul>
+                </div>
+                
+                <!-- Resource Utilization -->
+                <div class="report-section" id="report-resources">
+                    <h3>Resource Utilization</h3>
+                    <table id="resource-utilization-table" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Resource</th>
+                                <th>Total Tasks</th>
+                                <th>Completed Tasks</th>
+                                <th>Total Workload (days)</th>
+                            </tr>
+                        </thead>
+                        <tbody><tr><td colspan="4">No resources assigned to tasks.</td></tr></tbody>
+                    </table>
+                </div>
+
+                <!-- Task Details -->
+                <div class="report-section" id="report-task-details">
+                    <h3>Task Details</h3>
+                    <div id="report-task-details-list">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Action Items -->
+                <div class="report-section" id="report-action-items">
+                    <h3>Action Items</h3>
+                    <table id="action-items-table" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Action Item</th>
+                                <th>Assigned To</th>
+                                <th>Assigned By</th>
+                                <th>Assigned Date</th>
+                                <th>Due Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Meeting Minutes -->
+                <div class="report-section" id="report-meeting-minutes">
+                    <h3>Meeting Minutes</h3>
+                    <div id="report-meeting-minutes-list">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="meeting-minutes-page" class="tab-content" style="display: none;">
+            <div class="meeting-minutes-container">
+                <h2>Meeting Minutes</h2>
+                <form id="add-meeting-minute-form">
+                    <h3>Add New Entry</h3>
+                    <div class="form-group">
+                        <label for="meeting-date">Meeting Date</label>
+                        <input type="date" id="meeting-date" required>
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="meeting-minutes-textarea">Minutes</label>
+                        <textarea id="meeting-minutes-textarea" rows="8" placeholder="Enter meeting notes and decisions..." required></textarea>
+                    </div>
+                    <button type="submit" class="save-btn">Add Minutes</button>
+                </form>
+                <div id="meeting-minutes-list-container">
+                    <h3>Saved Minutes</h3>
+                    <div id="meeting-minutes-list">
+                        <p>No meeting minutes have been added yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="action-items-page" class="tab-content" style="display: none;">
+            <div class="action-items-container">
+                <h2>Action Items</h2>
+                <form id="add-action-item-form">
+                    <h3>Add New Action Item</h3>
+                    <div class="form-group form-group-full">
+                        <label for="action-item-what">What needs to be done?</label>
+                        <input type="text" id="action-item-what" placeholder="Enter the action item..." required>
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="action-item-assigned-to">Assigned To</label>
+                        <input type="text" id="action-item-assigned-to" placeholder="Enter names, comma-separated" required>
+                    </div>
+                     <div class="form-group">
+                        <label for="action-item-assigned-by">Who assigned it?</label>
+                        <input type="text" id="action-item-assigned-by" placeholder="Enter name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="action-item-assigned-date">When was it assigned?</label>
+                        <input type="date" id="action-item-assigned-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="action-item-due-date">When is it due?</label>
+                        <input type="date" id="action-item-due-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="action-item-status">Status</label>
+                        <select id="action-item-status" required>
+                            <option value="Not Started">Not Started</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Complete">Complete</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="save-btn">Add Action Item</button>
+                </form>
+                <div id="action-items-list-container">
+                    <h3>Tracked Items</h3>
+                    <div class="table-wrapper">
+                        <table id="action-items-list-table" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>What</th>
+                                    <th>Assigned To</th>
+                                    <th>Assigned By</th>
+                                    <th>Assigned</th>
+                                    <th>Due</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="action-items-list-tbody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="previous-reports-page" class="tab-content" style="display: none;">
+             <div class="previous-reports-container">
+                <h2>Archived Reports</h2>
+                <p>A snapshot of the report is automatically saved here every time you click "Export to PDF".</p>
+                <div id="previous-reports-list">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Edit Task Modal -->
+    <div id="edit-task-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title" style="display: none;">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h2 id="edit-modal-title">Edit Task</h2>
+                <button id="close-modal" class="close-button" aria-label="Close dialog">&times;</button>
+            </header>
+            <div class="modal-body">
+                <form id="edit-task-form">
+                    <div class="form-group">
+                        <label for="edit-task-name-input">Task Name</label>
+                        <input type="text" id="edit-task-name-input" required>
+                    </div>
+                     <div class="form-group form-group-full">
+                        <label for="edit-task-description-textarea">Task Description</label>
+                        <textarea id="edit-task-description-textarea" rows="3" placeholder="Add a detailed task description..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-start-date-input">Start Date</label>
+                        <input type="date" id="edit-start-date-input" required placeholder="Select start date...">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-end-date-input">End Date</label>
+                        <input type="date" id="edit-end-date-input" required placeholder="Select end date...">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-percent-complete-input">% Complete</label>
+                        <input type="number" id="edit-percent-complete-input" min="0" max="100" required>
+                    </div>
+                     <div class="form-group">
+                        <label for="edit-status-select">Status</label>
+                        <select id="edit-status-select">
+                            <option value="auto">Automatic</option>
+                            <option value="On Track">On Track</option>
+                            <option value="At Risk">At Risk</option>
+                            <option value="Delayed">Delayed</option>
+                            <option value="Complete">Complete</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-resources-input">Resources</label>
+                        <input type="text" id="edit-resources-input" placeholder="Comma-separated names">
+                    </div>
+                    <div id="edit-dependencies-container" class="form-group form-group-full">
+                        <label for="edit-dependencies-select">Dependencies (Finish-to-Start)</label>
+                        <select id="edit-dependencies-select" multiple>
+                            <!-- Options will be populated by JS -->
+                        </select>
+                        <small>Hold Ctrl/Cmd to select multiple tasks that must finish before this one starts.</small>
+                    </div>
+                    <div id="edit-custom-fields-container" class="custom-fields-container"></div>
+                     <div class="form-group">
+                        <label for="edit-notes-textarea">Notes</label>
+                        <textarea id="edit-notes-textarea" rows="4" placeholder="Add comments or details..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="delete-task-btn" class="delete-btn">Delete Task</button>
+                <button type="submit" form="edit-task-form" class="save-btn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Custom Fields Modal -->
+    <div id="custom-fields-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="custom-fields-modal-title" style="display: none;">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h2 id="custom-fields-modal-title">Manage Custom Fields</h2>
+                <button id="close-custom-fields-modal" class="close-button" aria-label="Close dialog">&times;</button>
+            </header>
+            <div class="modal-body">
+                <div id="custom-fields-list"></div>
+                <form id="add-custom-field-form">
+                    <h3>Add New Field</h3>
+                    <div class="form-group">
+                        <label for="custom-field-name-input">Field Name</label>
+                        <input type="text" id="custom-field-name-input" placeholder="e.g., Priority, Ticket ID" required>
+                    </div>
+                    <button type="submit" class="save-btn">Add Field</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Multiple Sub-tasks Modal -->
+    <div id="multiple-subtasks-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="multiple-subtasks-modal-title" style="display: none;">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h2 id="multiple-subtasks-modal-title">Add Sub-tasks</h2>
+                <button id="close-multiple-subtasks-modal" class="close-button" aria-label="Close dialog">&times;</button>
+            </header>
+            <div class="modal-body">
+                <p>Paste a list of sub-tasks below, with each on a new line. They will be added under <strong id="multiple-subtasks-parent-name"></strong>.</p>
+                <textarea id="multiple-subtasks-textarea" rows="10" placeholder="- Design new logo&#10;- Develop homepage mockup&#10;- User testing session"></textarea>
+            </div>
+            <div class="modal-footer" style="justify-content: flex-end;">
+                <button type="button" id="cancel-multiple-subtasks-btn" class="secondary-btn">Cancel</button>
+                <button type="button" id="submit-multiple-subtasks-btn" class="save-btn">Add Sub-tasks</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gantt Chart PDF Export Modal -->
+    <div id="pdf-export-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="pdf-export-modal-title" style="display: none;">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h2 id="pdf-export-modal-title">Export Gantt Chart to PDF</h2>
+                <button id="close-pdf-modal" class="close-button" aria-label="Close dialog">&times;</button>
+            </header>
+            <div class="modal-body">
+                <p>This will generate a PDF of the entire Gantt chart view. The page size will be automatically adjusted to fit the content without distortion.</p>
+            </div>
+            <div class="modal-footer" style="justify-content: flex-end;">
+                <button type="button" id="cancel-pdf-export-btn" class="secondary-btn">Cancel</button>
+                <button type="button" id="generate-gantt-pdf-btn" class="save-btn">Generate PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" style="display: none;">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h2 id="confirmation-title">Are you sure?</h2>
+            </header>
+            <div class="modal-body">
+                <p id="confirmation-message"></p>
+            </div>
+            <div class="modal-footer" style="justify-content: flex-end;">
+                <button type="button" id="confirmation-cancel-btn" class="secondary-btn">Cancel</button>
+                <button type="button" id="confirmation-confirm-btn" class="delete-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script type="module" src="index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
