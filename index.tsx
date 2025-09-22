@@ -1631,10 +1631,13 @@ function renderActionItemsPage(): void {
     }
 
     const sortedItems = [...actionItems].sort((a, b) => parseDateUTC(a.dueDate).getTime() - parseDateUTC(b.dueDate).getTime());
-    
+    const statuses: ActionItemStatus[] = ['Not Started', 'In Progress', 'Complete'];
+
     sortedItems.forEach(item => {
         const row = document.createElement('tr');
         const statusClass = item.status.toLowerCase().replace(' ', '-');
+        const optionsHtml = statuses.map(s => `<option value="${s}" ${item.status === s ? 'selected' : ''}>${s}</option>`).join('');
+
         row.innerHTML = `
             <td>${item.what}</td>
             <td>${item.assignedTo.join(', ')}</td>
@@ -1642,10 +1645,12 @@ function renderActionItemsPage(): void {
             <td>${item.assignedDate}</td>
             <td>${item.dueDate}</td>
             <td>
-                <span class="status-indicator">
+                <div class="status-indicator">
                     <span class="status-indicator-dot status-${statusClass}"></span>
-                    ${item.status}
-                </span>
+                    <select class="action-item-status-select" data-id="${item.id}" aria-label="Set status for ${item.what}">
+                        ${optionsHtml}
+                    </select>
+                </div>
             </td>
             <td><button class="delete-btn-list" data-id="${item.id}">Delete</button></td>
         `;
@@ -1683,6 +1688,14 @@ function addActionItem(): void {
     flatpickrInstances['action-item-assigned-date']?.clear();
     flatpickrInstances['action-item-due-date']?.clear();
     actionItemStatusSelect.value = 'Not Started';
+}
+
+function updateActionItemStatus(id: number, newStatus: ActionItemStatus): void {
+    const item = actionItems.find(item => item.id === id);
+    if (item) {
+        item.status = newStatus;
+        renderActionItemsPage(); // Re-render to update dot color and ensure consistency
+    }
 }
 
 function deleteActionItem(id: number): void {
@@ -3043,13 +3056,14 @@ async function exportGanttToPdf(): Promise<void> {
     
     if (!exportContainer || !ganttChartArea.classList.contains('has-content')) {
         alert('Chart is empty. Nothing to export.');
-        closePdfExportModal();
+        closePdfExportModal(); // Close modal if there's nothing to do
         return;
     }
 
     generateGanttPdfBtn.textContent = 'Generating...';
     generateGanttPdfBtn.disabled = true;
     
+    // Temporarily scroll to top-left for consistent rendering by html2canvas
     const originalScrollLeft = exportContainer.scrollLeft;
     const originalScrollTop = exportContainer.scrollTop;
     exportContainer.scrollLeft = 0;
@@ -3057,7 +3071,7 @@ async function exportGanttToPdf(): Promise<void> {
 
     try {
         const canvas = await html2canvas(exportContainer, {
-            scale: 2,
+            scale: 2, // Higher scale for better resolution
             useCORS: true,
             width: exportContainer.scrollWidth,
             height: exportContainer.scrollHeight,
@@ -3066,50 +3080,36 @@ async function exportGanttToPdf(): Promise<void> {
         });
 
         const imgData = canvas.toDataURL('image/png');
+        
         const { jsPDF } = jspdf;
 
-        // --- PDF Generation Constants ---
+        // Use a standard DPI for conversion from pixels to millimeters
         const DPI = 96;
         const MM_PER_INCH = 25.4;
-        const TITLE_MARGIN_MM = 20;
+        
+        const pdfWidth = (canvas.width / DPI) * MM_PER_INCH;
+        const pdfHeight = (canvas.height / DPI) * MM_PER_INCH;
+        
+        const orientation = pdfWidth > pdfHeight ? 'l' : 'p';
 
-        // --- Calculate Dimensions ---
-        const imgWidthMM = (canvas.width / DPI) * MM_PER_INCH;
-        const imgHeightMM = (canvas.height / DPI) * MM_PER_INCH;
-        const totalPdfWidth = imgWidthMM;
-        const totalPdfHeight = imgHeightMM + TITLE_MARGIN_MM;
-        const orientation = totalPdfWidth > totalPdfHeight ? 'l' : 'p';
-
-        // --- Create PDF ---
+        // Create a PDF with a custom page size that fits the content perfectly
         const pdf = new jsPDF({
             orientation: orientation,
             unit: 'mm',
-            format: [totalPdfWidth, totalPdfHeight]
-        });
-
-        // --- Add Title ---
-        const projectName = projectInfo.name || 'Gantt Chart';
-        pdf.setFontSize(16);
-        pdf.setFont(undefined, 'bold');
-        pdf.text(projectName, totalPdfWidth / 2, TITLE_MARGIN_MM / 2, {
-            align: 'center',
-            baseline: 'middle'
+            format: [pdfWidth, pdfHeight]
         });
         
-        // --- Add Gantt Chart Image ---
-        pdf.addImage(imgData, 'PNG', 0, TITLE_MARGIN_MM, imgWidthMM, imgHeightMM);
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
         
-        // --- Save PDF ---
-        const safeProjectName = (projectInfo.name || 'gaseng-pmt-chart')
-            .trim()
-            .replace(/[^a-z0-9]/gi, '_')
-            .toLowerCase();
-        pdf.save(`${safeProjectName}.pdf`);
+        // Filename now uses the project name if available for better organization
+        const projectName = projectNameInput.value.trim().replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'gaseng-pmt-chart';
+        pdf.save(`${projectName}.pdf`);
 
     } catch (error) {
         console.error("Failed to export Gantt to PDF:", error);
         alert("Could not export Gantt chart to PDF. See console for details.");
     } finally {
+        // Restore UI state
         generateGanttPdfBtn.textContent = 'Generate PDF';
         generateGanttPdfBtn.disabled = false;
         closePdfExportModal();
@@ -3511,6 +3511,16 @@ actionItemsTableBody.addEventListener('click', (e) => {
         const id = parseInt(target.dataset.id!, 10);
         if (id) {
             deleteActionItem(id);
+        }
+    }
+});
+actionItemsTableBody.addEventListener('change', (e) => {
+    const target = e.target as HTMLSelectElement;
+    if (target.matches('.action-item-status-select')) {
+        const id = parseInt(target.dataset.id!, 10);
+        const newStatus = target.value as ActionItemStatus;
+        if (id && newStatus) {
+            updateActionItemStatus(id, newStatus);
         }
     }
 });
