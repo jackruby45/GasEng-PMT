@@ -1,5 +1,4 @@
 
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -3395,6 +3394,7 @@ tabNavigation.addEventListener('click', (e) => {
             if (content.id === 'instructions-page') contentId = 'instructions';
             if (content.id === 'meeting-minutes-page') contentId = 'minutes';
             if (content.id === 'action-items-page') contentId = 'action-items';
+            if (content.id === 'invoices-page') contentId = 'invoices';
             if (content.id === 'previous-reports-page') contentId = 'previous-reports';
             
             content.style.display = contentId === tabId ? 'block' : 'none';
