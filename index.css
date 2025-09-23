@@ -1713,6 +1713,10 @@ button[type="submit"]:hover {
     grid-column: -2 / -1;
     align-self: end;
 }
+.action-item-complete td:not(:last-child):not(:nth-last-child(2)) {
+    text-decoration: line-through;
+    color: var(--placeholder-text);
+}
 .status-indicator {
     display: inline-flex;
     align-items: center;
@@ -1913,4 +1917,4 @@ span.flatpickr-weekday {
 .dependency-arrow {
     fill: var(--secondary-accent);
     opacity: 0.8;
-}allow the user to restatus an action item that has been competed and also to fully delete a previously created action item  
+}

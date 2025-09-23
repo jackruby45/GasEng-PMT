@@ -1,4 +1,5 @@
 
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -1634,6 +1635,9 @@ function renderActionItemsPage(): void {
 
     sortedItems.forEach(item => {
         const row = document.createElement('tr');
+        if (item.status === 'Complete') {
+            row.classList.add('action-item-complete');
+        }
         const statusClass = item.status.toLowerCase().replace(' ', '-');
         const optionsHtml = statuses.map(s => `<option value="${s}" ${item.status === s ? 'selected' : ''}>${s}</option>`).join('');
 
