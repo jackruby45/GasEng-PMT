@@ -3092,21 +3092,38 @@ async function exportReportToPDF(): Promise<void> {
         };
 
         const drawSectionTitle = (title: string) => {
-            checkAndAddPage(15);
             pdf.setFontSize(14);
             pdf.setFont(undefined, 'bold');
+            const titleHeight = (pdf.getLineHeight() / pdf.internal.scaleFactor);
+            // Needed height: text height + gap + line thickness (negligible) + padding after
+            const neededHeight = titleHeight + 2 + 5; 
+            checkAndAddPage(neededHeight);
+
             pdf.setTextColor(40, 40, 40);
-            pdf.text(title, MARGIN.LEFT, currentY);
-            currentY += 8;
+            // Position the baseline so the top of the text is at currentY
+            pdf.text(title, MARGIN.LEFT, currentY + titleHeight);
+            currentY += titleHeight; // Move Y past the text
+            
+            currentY += 2; // Add a small gap between text and line
+            
             pdf.setDrawColor(200, 200, 200);
             pdf.line(MARGIN.LEFT, currentY, MARGIN.LEFT + CONTENT_WIDTH, currentY);
-            currentY += 8;
+            
+            currentY += 5; // Add padding after line for the content that follows
         };
         
-        const drawWrappedText = (text: string, x: number, y: number, width: number, options: any = {}) => {
+        const drawMultiLineText = (text: string, x: number, width: number, options: { fontStyle?: string, fontSize?: number, color?: number[] } = {}) => {
+            if (options.fontStyle) pdf.setFont(undefined, options.fontStyle);
+            if (options.fontSize) pdf.setFontSize(options.fontSize);
+            if (options.color) pdf.setTextColor(...options.color);
+            
             const lines = pdf.splitTextToSize(text || 'N/A', width);
-            pdf.text(lines, x, y, options);
-            return lines.length * 5; // Estimate height
+            const lineHeight = pdf.getLineHeight() / pdf.internal.scaleFactor;
+            lines.forEach((line: string) => {
+                checkAndAddPage(lineHeight);
+                pdf.text(line, x, currentY);
+                currentY += lineHeight;
+            });
         };
 
         // --- Cover Page ---
@@ -3127,112 +3144,67 @@ async function exportReportToPDF(): Promise<void> {
 
         // --- Project Summary Section ---
         drawSectionTitle("Project Summary");
-        pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
-        pdf.setTextColor(80, 80, 80);
         
-        let summaryGridY = currentY;
-        const col1X = MARGIN.LEFT;
-        const col2X = MARGIN.LEFT + CONTENT_WIDTH / 2;
-        const labelOffset = 40;
+        const drawSummaryField = (label: string, value: string) => {
+            pdf.setFontSize(10);
+            const lineHeight = pdf.getLineHeight() / pdf.internal.scaleFactor;
+            const valueLines = pdf.splitTextToSize(value || 'N/A', CONTENT_WIDTH - 45); // 45mm label width
+            const neededHeight = Math.max(lineHeight, valueLines.length * lineHeight) + 4; // 4mm padding
+            checkAndAddPage(neededHeight);
 
-        // Row 1: Owner & Engineering Manager
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Owner:', col1X, summaryGridY);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(projectInfo.owner || 'N/A', col1X + labelOffset, summaryGridY);
+            const fieldStartY = currentY;
+            pdf.setFont(undefined, 'bold');
+            pdf.setTextColor(60, 60, 60);
+            // Vertically align label with first line of value
+            pdf.text(label, MARGIN.LEFT, fieldStartY + lineHeight - 2); 
 
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Engineering Manager:', col2X, summaryGridY);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(projectInfo.engineeringManager || 'N/A', col2X + labelOffset, summaryGridY);
-        summaryGridY += 7;
-
-        // Row 2: Project Manager & Start Date
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Project Manager:', col1X, summaryGridY);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(projectInfo.manager || 'N/A', col1X + labelOffset, summaryGridY);
-
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Start Date:', col2X, summaryGridY);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(projectInfo.startDate || 'N/A', col2X + labelOffset, summaryGridY);
-        summaryGridY += 7;
-
-        // Row 3: End Date & Location
-        pdf.setFont(undefined, 'bold');
-        pdf.text('End Date:', col1X, summaryGridY);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(projectInfo.endDate || 'N/A', col1X + labelOffset, summaryGridY);
-
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Location:', col2X, summaryGridY);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(projectInfo.location || 'N/A', col2X + labelOffset, summaryGridY);
-        summaryGridY += 7;
-
-        // Row 4: DOC & Budget
-        pdf.setFont(undefined, 'bold');
-        pdf.text('DOC:', col1X, summaryGridY);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(projectInfo.doc || 'N/A', col1X + labelOffset, summaryGridY);
-
+            pdf.setFont(undefined, 'normal');
+            pdf.setTextColor(80, 80, 80);
+            valueLines.forEach((line: string, index: number) => {
+                pdf.text(line, MARGIN.LEFT + 45, fieldStartY + (index * lineHeight) + lineHeight - 2);
+            });
+            currentY = fieldStartY + neededHeight;
+        };
+        
+        drawSummaryField('Owner:', projectInfo.owner);
+        drawSummaryField('Engineering Manager:', projectInfo.engineeringManager);
+        drawSummaryField('Project Manager:', projectInfo.manager);
+        drawSummaryField('Start Date:', projectInfo.startDate);
+        drawSummaryField('End Date:', projectInfo.endDate);
+        drawSummaryField('Location:', projectInfo.location);
+        drawSummaryField('DOC:', projectInfo.doc);
         const budgetValue = projectInfo.budget;
         const currency = projectInfo.currency || 'USD';
         let formattedBudget = 'N/A';
         if (typeof budgetValue === 'number' && !isNaN(budgetValue)) {
             formattedBudget = new Intl.NumberFormat(undefined, {
-                style: 'currency',
-                currency: currency,
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
+                style: 'currency', currency: currency, minimumFractionDigits: 2, maximumFractionDigits: 2
             }).format(budgetValue);
         } else if (budgetValue) {
             formattedBudget = `${budgetValue} ${currency}`;
         }
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Budget:', col2X, summaryGridY);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(formattedBudget, col2X + labelOffset, summaryGridY);
-        summaryGridY += 10;
-        currentY = summaryGridY;
-
-        // Engineers (full width)
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Project Engineer(s):', MARGIN.LEFT, currentY);
-        pdf.setFont(undefined, 'normal');
-        pdf.setTextColor(80, 80, 80);
-        currentY += 6;
-        currentY += drawWrappedText(projectInfo.engineers || 'N/A', MARGIN.LEFT, currentY, CONTENT_WIDTH);
+        drawSummaryField('Budget:', formattedBudget);
         currentY += 5;
 
-        // Description
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Description:', MARGIN.LEFT, currentY);
-        pdf.setFont(undefined, 'normal');
-        pdf.setTextColor(80, 80, 80);
-        currentY += 6;
-        currentY += drawWrappedText(projectInfo.description || 'N/A', MARGIN.LEFT, currentY, CONTENT_WIDTH);
-        currentY += 5;
-
-        // Deliverables
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Deliverables:', MARGIN.LEFT, currentY);
-        pdf.setFont(undefined, 'normal');
-        pdf.setTextColor(80, 80, 80);
-        currentY += 6;
-        currentY += drawWrappedText(projectInfo.deliverables || 'N/A', MARGIN.LEFT, currentY, CONTENT_WIDTH);
-        currentY += 10;
+        // Full-width fields
+        checkAndAddPage(10);
+        drawMultiLineText('Project Engineer(s):', MARGIN.LEFT, CONTENT_WIDTH, { fontStyle: 'bold', fontSize: 10, color: [60,60,60] });
+        drawMultiLineText(projectInfo.engineers, MARGIN.LEFT, CONTENT_WIDTH, { fontStyle: 'normal', fontSize: 10, color: [80,80,80] });
         
+        checkAndAddPage(10);
+        drawMultiLineText('Description:', MARGIN.LEFT, CONTENT_WIDTH, { fontStyle: 'bold', fontSize: 10, color: [60,60,60] });
+        drawMultiLineText(projectInfo.description, MARGIN.LEFT, CONTENT_WIDTH, { fontStyle: 'normal', fontSize: 10, color: [80,80,80] });
+        
+        checkAndAddPage(10);
+        drawMultiLineText('Deliverables:', MARGIN.LEFT, CONTENT_WIDTH, { fontStyle: 'bold', fontSize: 10, color: [60,60,60] });
+        drawMultiLineText(projectInfo.deliverables, MARGIN.LEFT, CONTENT_WIDTH, { fontStyle: 'normal', fontSize: 10, color: [80,80,80] });
+        currentY += 5;
+
         // --- Written Summary Section ---
         const writtenSummary = (document.getElementById('report-written-summary-textarea') as HTMLTextAreaElement)?.value.trim();
         if (writtenSummary) {
             drawSectionTitle("Written Summary");
-            pdf.setFontSize(10);
-            pdf.setFont(undefined, 'normal');
-            pdf.setTextColor(80, 80, 80);
-            currentY += drawWrappedText(writtenSummary, MARGIN.LEFT, currentY, CONTENT_WIDTH);
+            drawMultiLineText(writtenSummary, MARGIN.LEFT, CONTENT_WIDTH, { fontStyle: 'normal', fontSize: 10, color: [80,80,80] });
             currentY += 5;
         }
         
@@ -3253,11 +3225,13 @@ async function exportReportToPDF(): Promise<void> {
         pdf.rect(MARGIN.LEFT, currentY, CONTENT_WIDTH, 8, 'FD');
         pdf.setFillColor(statusColorMap['On Track']);
         pdf.rect(MARGIN.LEFT, currentY, CONTENT_WIDTH * (overallProgress / 100), 8, 'F');
+        currentY += 10; // Move Y below the bar + 2mm padding.
+        
         pdf.setFontSize(12);
         pdf.setFont(undefined, 'bold');
         pdf.setTextColor(40, 40, 40);
-        pdf.text(`${overallProgress}% Complete`, MARGIN.LEFT + CONTENT_WIDTH + 3, currentY + 6);
-        currentY += 15;
+        pdf.text(`${overallProgress}% Complete`, MARGIN.LEFT, currentY);
+        currentY += 5; // Space for text and padding for next section. Total Y change is 15mm.
 
 
         // --- Task Lists ---
@@ -3267,16 +3241,9 @@ async function exportReportToPDF(): Promise<void> {
         const atRiskTasks = tasks.filter(t => getCalculatedStatus(t) === 'At Risk' && !overdueTasks.includes(t));
         
         const renderTaskTable = (title: string, taskList: Task[]) => {
+            if (taskList.length === 0) return; // Don't show empty tables
             drawSectionTitle(title);
-            if (taskList.length === 0) {
-                pdf.setFontSize(10);
-                pdf.setFont(undefined, 'italic');
-                pdf.setTextColor(150, 150, 150);
-                pdf.text("No tasks in this category.", MARGIN.LEFT, currentY);
-                currentY += 10;
-                return;
-            }
-             (pdf as any).autoTable({
+            (pdf as any).autoTable({
                 startY: currentY,
                 head: [['Task Name', 'Status', 'Due Date', '% Complete']],
                 body: taskList.map(t => {
@@ -3294,56 +3261,69 @@ async function exportReportToPDF(): Promise<void> {
         renderTaskTable("At-Risk & Overdue Tasks", [...overdueTasks, ...atRiskTasks]);
 
         // --- Task Details ---
-        drawSectionTitle("Task Details");
-        
-        const renderPdfTaskDetailRecursive = (taskId: number, level: number) => {
-            const task = tasks.find(t => t.id === taskId);
-            if (!task) return;
+        if (tasks.length > 0) {
+            drawSectionTitle("Task Details");
             
-            // FIX: Use the correct variable 'task' instead of 't' which is out of scope.
-            const effectiveStatus = getCalculatedStatus(task);
-            const statusColor = statusColorMap[effectiveStatus];
+            const renderPdfTaskDetailRecursive = (taskId: number, level: number) => {
+                const task = tasks.find(t => t.id === taskId);
+                if (!task) return;
+                
+                const effectiveStatus = getCalculatedStatus(task);
+                const statusColor = statusColorMap[effectiveStatus];
+                const indent = level * 10;
+                pdf.setFontSize(10);
+                const taskLineHeight = pdf.getLineHeight() / pdf.internal.scaleFactor;
+                
+                pdf.setFontSize(11);
+                const taskNameLines = pdf.splitTextToSize(task.name, CONTENT_WIDTH - indent - 20); // 20mm for status
+                const nameBlockHeight = taskNameLines.length * (pdf.getLineHeight() / pdf.internal.scaleFactor);
+                
+                const minBlockHeight = nameBlockHeight + 10;
+                checkAndAddPage(minBlockHeight);
+                const startY = currentY;
 
-            checkAndAddPage(25); // Minimum height for a task block
+                // Draw Task Name
+                pdf.setFont(undefined, 'bold');
+                pdf.setTextColor(40, 40, 40);
+                taskNameLines.forEach((line: string, index: number) => {
+                    pdf.text(line, MARGIN.LEFT + indent, startY + (index * (pdf.getLineHeight() / pdf.internal.scaleFactor)));
+                });
+                
+                // Draw Status (aligned with first line of name)
+                pdf.setFontSize(9);
+                pdf.setFont(undefined, 'normal');
+                pdf.setTextColor(80, 80, 80);
+                pdf.text(effectiveStatus, MARGIN.LEFT + CONTENT_WIDTH - 2, startY, { align: 'right' });
+                pdf.setFillColor(statusColor);
+                pdf.circle(MARGIN.LEFT + CONTENT_WIDTH - 5 - pdf.getTextWidth(effectiveStatus), startY - 1.5, 2, 'F');
+                
+                currentY = startY + nameBlockHeight + 3;
+
+                // Draw Dates & Progress
+                pdf.text(`Dates: ${task.startDate} to ${task.endDate}`, MARGIN.LEFT + indent, currentY);
+                pdf.text(`Progress: ${task.percentComplete}%`, MARGIN.LEFT + CONTENT_WIDTH / 2, currentY);
+                currentY += taskLineHeight;
+
+                if (task.description) {
+                    currentY += 2;
+                    drawMultiLineText('Description:', MARGIN.LEFT + indent, CONTENT_WIDTH - indent, { fontStyle: 'bold', fontSize: 9, color: [100,100,100]});
+                    drawMultiLineText(task.description, MARGIN.LEFT + indent, CONTENT_WIDTH - indent, { fontStyle: 'normal', fontSize: 9, color: [100,100,100]});
+                }
+                
+                if (task.notes) {
+                    currentY += 2;
+                    drawMultiLineText('Notes:', MARGIN.LEFT + indent, CONTENT_WIDTH - indent, { fontStyle: 'bold', fontSize: 9, color: [100,100,100]});
+                    drawMultiLineText(task.notes, MARGIN.LEFT + indent, CONTENT_WIDTH - indent, { fontStyle: 'normal', fontSize: 9, color: [100,100,100]});
+                }
+                currentY += 8;
+
+                const children = tasks.filter(t => t.parentId === taskId);
+                children.forEach(child => renderPdfTaskDetailRecursive(child.id, level + 1));
+            };
             
-            pdf.setFillColor(248, 249, 250);
-            pdf.setDrawColor(222, 226, 230);
-            
-            const indent = level * 10;
-            pdf.setFontSize(11);
-            pdf.setFont(undefined, 'bold');
-            pdf.setTextColor(40, 40, 40);
-            pdf.text(task.name, MARGIN.LEFT + indent, currentY);
-
-            pdf.setFillColor(statusColor);
-            pdf.circle(MARGIN.LEFT + CONTENT_WIDTH - 5, currentY - 1.5, 2, 'F');
-            pdf.setFontSize(9);
-            pdf.setFont(undefined, 'normal');
-            pdf.setTextColor(80, 80, 80);
-            pdf.text(effectiveStatus, MARGIN.LEFT + CONTENT_WIDTH - 10, currentY, { align: 'right' });
-
-            currentY += 6;
-            
-            pdf.text(`Dates: ${task.startDate} to ${task.endDate}`, MARGIN.LEFT + indent, currentY);
-            pdf.text(`Progress: ${task.percentComplete}%`, MARGIN.LEFT + CONTENT_WIDTH / 2, currentY);
-            currentY += 5;
-
-            if (task.description) {
-                currentY += drawWrappedText(`Description: ${task.description}`, MARGIN.LEFT + indent, currentY, CONTENT_WIDTH - indent);
-                 currentY += 3;
-            }
-            
-            if (task.notes) {
-                currentY += drawWrappedText(`Notes: ${task.notes}`, MARGIN.LEFT + indent, currentY, CONTENT_WIDTH - indent);
-            }
-            currentY += 8;
-
-            const children = tasks.filter(t => t.parentId === taskId);
-            children.forEach(child => renderPdfTaskDetailRecursive(child.id, level + 1));
-        };
-        
-        const topLevelTasks = tasks.filter(t => t.parentId === null);
-        topLevelTasks.forEach(task => renderPdfTaskDetailRecursive(task.id, 0));
+            const topLevelTasks = tasks.filter(t => t.parentId === null);
+            topLevelTasks.forEach(task => renderPdfTaskDetailRecursive(task.id, 0));
+        }
         
         // --- Action Items Section ---
         if (actionItems.length > 0) {
@@ -3367,25 +3347,58 @@ async function exportReportToPDF(): Promise<void> {
             const sortedMinutes = [...meetingMinutes].sort((a, b) => parseDateUTC(a.meetingDate).getTime() - parseDateUTC(b.meetingDate).getTime());
             sortedMinutes.forEach(minute => {
                 const cleanedMinutes = minute.minutes.replace(/[#*]/g, '');
-                const textContent = `Meeting Date: ${minute.meetingDate} (Added: ${minute.addedDate})\n\n${cleanedMinutes}`;
-                const lines = pdf.splitTextToSize(textContent, CONTENT_WIDTH);
-                const neededHeight = (lines.length * 5) + 10; // 5mm per line + padding
-                checkAndAddPage(neededHeight);
-
+                checkAndAddPage(15);
+                
                 pdf.setFontSize(10);
                 pdf.setFont(undefined, 'bold');
                 pdf.text(`Meeting Date: ${minute.meetingDate}`, MARGIN.LEFT, currentY);
                 pdf.setFont(undefined, 'normal');
-                pdf.text(`(Added: ${minute.addedDate})`, MARGIN.LEFT + 50, currentY);
+                pdf.text(`(Added: ${minute.addedDate})`, MARGIN.LEFT + 60, currentY);
                 currentY += 8;
 
-                pdf.setFontSize(10);
-                pdf.setTextColor(80, 80, 80);
-                const minutesHeight = drawWrappedText(cleanedMinutes, MARGIN.LEFT, currentY, CONTENT_WIDTH);
-                currentY += minutesHeight + 8;
+                drawMultiLineText(cleanedMinutes, MARGIN.LEFT, CONTENT_WIDTH, { fontSize: 10, color: [80, 80, 80] });
+                currentY += 5;
             });
         }
+        
+        // --- Invoicing Section ---
+        if (invoicingEntities.length > 0) {
+            drawSectionTitle("Invoicing");
+            invoicingEntities.forEach(entity => {
+                checkAndAddPage(15); // Space for entity name and details
 
+                pdf.setFontSize(12);
+                pdf.setFont(undefined, 'bold');
+                pdf.setTextColor(60, 60, 60);
+                pdf.text(entity.name, MARGIN.LEFT, currentY);
+                currentY += 7;
+
+                if (entity.invoices.length > 0) {
+                    (pdf as any).autoTable({
+                        startY: currentY,
+                        head: [['Inv #', 'Date', 'Due', 'Amount', 'Status', 'Description']],
+                        body: entity.invoices.map(inv => {
+                            const formattedAmount = new Intl.NumberFormat(undefined, { style: 'currency', currency: projectInfo.currency || 'USD' }).format(inv.amount);
+                            const statusText = inv.status === 'Other' ? `Other: ${inv.otherStatus}` : inv.status;
+                            return [inv.invoiceNumber, inv.invoiceDate, inv.dueDate, formattedAmount, statusText, inv.description];
+                        }),
+                        theme: 'grid',
+                        headStyles: { fillColor: [60, 70, 80] },
+                        didDrawPage: (data: any) => { currentY = data.cursor.y + 5; },
+                        margin: { left: MARGIN.LEFT, right: MARGIN.RIGHT },
+                        columnStyles: { 3: { halign: 'right' } }
+                    });
+                    currentY = (pdf as any).lastAutoTable.finalY + 10;
+                } else {
+                    checkAndAddPage(8);
+                    pdf.setFontSize(10);
+                    pdf.setFont(undefined, 'italic');
+                    pdf.setTextColor(150, 150, 150);
+                    pdf.text("No invoices for this entity.", MARGIN.LEFT, currentY);
+                    currentY += 15;
+                }
+            });
+        }
 
         // --- Page Numbers ---
         const pageCount = (pdf as any).internal.getNumberOfPages();
