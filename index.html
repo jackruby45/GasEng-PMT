@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF--8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GasEng-PMT  Gas Engineering Project Management Tool</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
@@ -14,7 +14,7 @@
         <header>
             <div class="title-container">
                 <h1>GasEng-PMT  Gas Engineering Project Management Tool</h1>
-                <p class="subtitle">Written by Tim Bickford - Rev 1.0 Beta</p>
+                <p class="subtitle">Written by Tim Bickford - Rev 4.0 Beta</p>
             </div>
             <div id="notification-container" class="notification-container">
                 <button id="notification-bell" aria-label="Notifications" data-tooltip="Show recent notifications for overdue and upcoming tasks.">
@@ -162,9 +162,6 @@
                     <div class="gantt-scroll-wrapper">
                         <div id="gantt-chart" class="gantt-chart-area" aria-label="Gantt Chart Area">
                             <svg id="dependency-lines" class="dependency-lines-svg"></svg>
-                            <div class="gantt-empty-state">
-                                <p>Add tasks below to get started.</p>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -505,10 +502,40 @@
         </div>
 
         <div id="invoices-page" class="tab-content" style="display: none;">
-            <div class="instructions-content">
-               <h2>Invoices</h2>
-               <p>This section is under construction. Invoice tracking functionality will be available here in a future update.</p>
-           </div>
+            <div class="invoicing-container">
+                <h2>Invoicing Entities</h2>
+                <p>Manage the companies or individuals you will be invoicing.</p>
+                <form id="add-invoicing-entity-form">
+                    <h3>Add New Entity</h3>
+                    <div class="form-group form-group-full">
+                        <label for="invoicing-entity-name">Entity Name</label>
+                        <input type="text" id="invoicing-entity-name" placeholder="e.g., Main Contractor Inc." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="invoicing-entity-contact-person">Contact Person</label>
+                        <input type="text" id="invoicing-entity-contact-person" placeholder="e.g., Jane Doe">
+                    </div>
+                    <div class="form-group">
+                        <label for="invoicing-entity-email">Email</label>
+                        <input type="email" id="invoicing-entity-email" placeholder="e.g., accounts@contractor.com">
+                    </div>
+                     <div class="form-group">
+                        <label for="invoicing-entity-phone">Phone Number</label>
+                        <input type="tel" id="invoicing-entity-phone" placeholder="e.g., (555) 123-4567">
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="invoicing-entity-address">Address</label>
+                        <textarea id="invoicing-entity-address" rows="3" placeholder="Enter mailing address..."></textarea>
+                    </div>
+                    <button type="submit" class="save-btn">Add Entity</button>
+                </form>
+                <div id="invoicing-entity-list-container">
+                    <h3>Saved Entities</h3>
+                    <div id="invoicing-entity-list">
+                        <p>No invoicing entities have been added yet.</p>
+                    </div>
+                </div>
+            </div>
        </div>
 
         <div id="previous-reports-page" class="tab-content" style="display: none;">
@@ -655,6 +682,89 @@
             <div class="modal-footer" style="justify-content: flex-end;">
                 <button type="button" id="confirmation-cancel-btn" class="secondary-btn">Cancel</button>
                 <button type="button" id="confirmation-confirm-btn" class="delete-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Invoicing Entity Modal -->
+    <div id="edit-invoicing-entity-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-invoicing-entity-modal-title" style="display: none;">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h2 id="edit-invoicing-entity-modal-title">Edit Invoicing Entity</h2>
+                <button id="close-edit-invoicing-entity-modal" class="close-button" aria-label="Close dialog">&times;</button>
+            </header>
+            <div class="modal-body">
+                <form id="edit-invoicing-entity-form">
+                    <div class="form-group form-group-full">
+                        <label for="edit-invoicing-entity-name">Entity Name</label>
+                        <input type="text" id="edit-invoicing-entity-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-invoicing-entity-contact-person">Contact Person</label>
+                        <input type="text" id="edit-invoicing-entity-contact-person">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-invoicing-entity-email">Email</label>
+                        <input type="email" id="edit-invoicing-entity-email">
+                    </div>
+                     <div class="form-group">
+                        <label for="edit-invoicing-entity-phone">Phone Number</label>
+                        <input type="tel" id="edit-invoicing-entity-phone">
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="edit-invoicing-entity-address">Address</label>
+                        <textarea id="edit-invoicing-entity-address" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="delete-invoicing-entity-btn" class="delete-btn">Delete Entity</button>
+                <button type="submit" form="edit-invoicing-entity-form" class="save-btn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Invoice Modal -->
+    <div id="edit-invoice-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-invoice-modal-title" style="display: none;">
+        <div class="modal-content">
+            <header class="modal-header">
+                <h2 id="edit-invoice-modal-title">Edit Invoice</h2>
+                <button id="close-edit-invoice-modal" class="close-button" aria-label="Close dialog">&times;</button>
+            </header>
+            <div class="modal-body">
+                <form id="edit-invoice-form">
+                    <div class="form-group">
+                        <label for="edit-invoice-number">Invoice Number</label>
+                        <input type="text" id="edit-invoice-number" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-invoice-amount">Invoice Amount</label>
+                        <input type="number" id="edit-invoice-amount" min="0" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-invoice-date">Invoice Date</label>
+                        <input type="date" id="edit-invoice-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-invoice-due-date">Due Date</label>
+                        <input type="date" id="edit-invoice-due-date" required>
+                    </div>
+                    <div class="form-group form-group-full">
+                        <label for="edit-invoice-description">Description</label>
+                        <textarea id="edit-invoice-description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group form-group-full status-group">
+                        <label for="edit-invoice-status">Status</label>
+                        <select id="edit-invoice-status">
+                            <!-- Options populated by JS -->
+                        </select>
+                        <textarea id="edit-invoice-other-status" class="other-status-input" rows="2" placeholder="Specify other status..." style="display: none; margin-top: 0.5rem;"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer" style="justify-content: flex-end;">
+                 <button type="button" id="cancel-edit-invoice-btn" class="secondary-btn">Cancel</button>
+                <button type="submit" form="edit-invoice-form" class="save-btn">Save Changes</button>
             </div>
         </div>
     </div>

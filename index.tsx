@@ -12,6 +12,7 @@ declare const flatpickr: any;
 type ViewMode = 'day' | 'week' | 'month' | 'quarter' | 'year';
 type TaskStatus = 'On Track' | 'At Risk' | 'Delayed' | 'Complete';
 type ActionItemStatus = 'Not Started' | 'In Progress' | 'Complete';
+type InvoiceStatus = 'Out for review' | 'Paid' | 'Hold' | 'Returned' | 'Declined' | 'Other';
 
 interface Task {
     id: number;
@@ -79,6 +80,27 @@ interface PreviousReport {
     content: string;
 }
 
+interface Invoice {
+    id: number;
+    invoiceNumber: string;
+    invoiceDate: string;
+    dueDate: string;
+    description: string;
+    amount: number;
+    status: InvoiceStatus;
+    otherStatus?: string;
+}
+
+interface InvoicingEntity {
+    id: number;
+    name: string;
+    contactPerson?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    invoices: Invoice[];
+}
+
 interface ProjectState {
     projectInfo: ProjectInfo;
     tasks: Task[];
@@ -87,9 +109,12 @@ interface ProjectState {
     meetingMinutes: MeetingMinute[];
     actionItems: ActionItem[];
     previousReports: PreviousReport[];
+    invoicingEntities: InvoicingEntity[];
     nextMeetingMinuteId: number;
     nextActionItemId: number;
     nextPreviousReportId: number;
+    nextInvoicingEntityId: number;
+    nextInvoiceId: number;
     nextTaskId: number;
     expandedTaskIds: number[];
     currentView: ViewMode;
@@ -127,13 +152,18 @@ let customFieldsSchema: CustomFieldSchema[] = [];
 let meetingMinutes: MeetingMinute[] = [];
 let actionItems: ActionItem[] = [];
 let previousReports: PreviousReport[] = [];
+let invoicingEntities: InvoicingEntity[] = [];
 // FIX: Updated the type of the notifications array to use the new AppNotification interface.
 let notifications: AppNotification[] = [];
 let nextTaskId = 1;
 let nextMeetingMinuteId = 1;
 let nextActionItemId = 1;
 let nextPreviousReportId = 1;
+let nextInvoicingEntityId = 1;
+let nextInvoiceId = 1;
 let editingTaskId: number | null = null;
+let editingInvoicingEntityId: number | null = null;
+let editingInvoiceDetails: { entityId: number, invoiceId: number } | null = null;
 let subtaskParentId: number | null = null;
 let expandedTaskIds: Set<number> = new Set();
 let currentView: ViewMode = 'day';
@@ -206,7 +236,7 @@ const notificationPanel = document.getElementById('notification-panel') as HTMLD
 const notificationList = document.getElementById('notification-list') as HTMLUListElement;
 
 
-// Edit Modal DOM Elements
+// Edit Task Modal DOM Elements
 const editTaskModal = document.getElementById('edit-task-modal') as HTMLDivElement;
 const editTaskForm = document.getElementById('edit-task-form') as HTMLFormElement;
 const editTaskNameInput = document.getElementById('edit-task-name-input') as HTMLInputElement;
@@ -246,6 +276,7 @@ const reportPage = document.getElementById('report-page') as HTMLDivElement;
 const instructionsPage = document.getElementById('instructions-page') as HTMLDivElement;
 const meetingMinutesPage = document.getElementById('meeting-minutes-page') as HTMLDivElement;
 const actionItemsPage = document.getElementById('action-items-page') as HTMLDivElement;
+const invoicesPage = document.getElementById('invoices-page') as HTMLDivElement;
 const previousReportsPage = document.getElementById('previous-reports-page') as HTMLDivElement;
 const tabContents = document.querySelectorAll('.tab-content') as NodeListOf<HTMLElement>;
 const exportPdfBtn = document.getElementById('export-pdf-btn') as HTMLButtonElement;
@@ -285,6 +316,39 @@ const confirmationCancelBtn = document.getElementById('confirmation-cancel-btn')
 const confirmationConfirmBtn = document.getElementById('confirmation-confirm-btn') as HTMLButtonElement;
 let onConfirmCallback: (() => void) | null = null;
 let onCancelCallback: (() => void) | null = null;
+
+// Invoicing Page DOM Elements
+const addInvoicingEntityForm = document.getElementById('add-invoicing-entity-form') as HTMLFormElement;
+const invoicingEntityNameInput = document.getElementById('invoicing-entity-name') as HTMLInputElement;
+const invoicingEntityContactPersonInput = document.getElementById('invoicing-entity-contact-person') as HTMLInputElement;
+const invoicingEntityEmailInput = document.getElementById('invoicing-entity-email') as HTMLInputElement;
+const invoicingEntityPhoneInput = document.getElementById('invoicing-entity-phone') as HTMLInputElement;
+const invoicingEntityAddressTextarea = document.getElementById('invoicing-entity-address') as HTMLTextAreaElement;
+const invoicingEntityList = document.getElementById('invoicing-entity-list') as HTMLDivElement;
+
+// Edit Invoicing Entity Modal
+const editInvoicingEntityModal = document.getElementById('edit-invoicing-entity-modal') as HTMLDivElement;
+const closeEditInvoicingEntityModalBtn = document.getElementById('close-edit-invoicing-entity-modal') as HTMLButtonElement;
+const editInvoicingEntityForm = document.getElementById('edit-invoicing-entity-form') as HTMLFormElement;
+const editInvoicingEntityNameInput = document.getElementById('edit-invoicing-entity-name') as HTMLInputElement;
+const editInvoicingEntityContactPersonInput = document.getElementById('edit-invoicing-entity-contact-person') as HTMLInputElement;
+const editInvoicingEntityEmailInput = document.getElementById('edit-invoicing-entity-email') as HTMLInputElement;
+const editInvoicingEntityPhoneInput = document.getElementById('edit-invoicing-entity-phone') as HTMLInputElement;
+const editInvoicingEntityAddressTextarea = document.getElementById('edit-invoicing-entity-address') as HTMLTextAreaElement;
+const deleteInvoicingEntityBtn = document.getElementById('delete-invoicing-entity-btn') as HTMLButtonElement;
+
+// Edit Invoice Modal
+const editInvoiceModal = document.getElementById('edit-invoice-modal') as HTMLDivElement;
+const closeEditInvoiceModalBtn = document.getElementById('close-edit-invoice-modal') as HTMLButtonElement;
+const cancelEditInvoiceBtn = document.getElementById('cancel-edit-invoice-btn') as HTMLButtonElement;
+const editInvoiceForm = document.getElementById('edit-invoice-form') as HTMLFormElement;
+const editInvoiceNumberInput = document.getElementById('edit-invoice-number') as HTMLInputElement;
+const editInvoiceAmountInput = document.getElementById('edit-invoice-amount') as HTMLInputElement;
+const editInvoiceDateInput = document.getElementById('edit-invoice-date') as HTMLInputElement;
+const editInvoiceDueDateInput = document.getElementById('edit-invoice-due-date') as HTMLInputElement;
+const editInvoiceDescriptionTextarea = document.getElementById('edit-invoice-description') as HTMLTextAreaElement;
+const editInvoiceStatusSelect = document.getElementById('edit-invoice-status') as HTMLSelectElement;
+const editInvoiceOtherStatusTextarea = document.getElementById('edit-invoice-other-status') as HTMLTextAreaElement;
 
 // --- COLOR GENERATION & MANAGEMENT ---
 const statusColorMap: { [key in TaskStatus]: string } = {
@@ -754,6 +818,7 @@ function getVisibleTasks(): Task[] {
  */
 function renderGanttChart(): void {
     if (!ganttChartArea) return;
+    const scrollWrapper = ganttChartArea.parentElement as HTMLElement;
     
     // Remove the old grid if it exists
     const oldGrid = ganttChartArea.querySelector('.gantt-grid');
@@ -763,11 +828,17 @@ function renderGanttChart(): void {
 
     const visibleTasks = getVisibleTasks();
     if (visibleTasks.length === 0) {
+        if (scrollWrapper) {
+            scrollWrapper.style.display = 'none';
+        }
         ganttChartArea.classList.remove('has-content');
         dependencyLinesSvg.innerHTML = '';
         return;
     }
 
+    if (scrollWrapper) {
+        scrollWrapper.style.display = 'block';
+    }
     ganttChartArea.classList.add('has-content');
 
     const allDates = tasks.flatMap(task => [parseDateUTC(task.startDate), parseDateUTC(task.endDate)]);
@@ -1762,6 +1833,297 @@ function deletePreviousReport(id: number): void {
     );
 }
 
+// --- INVOICING ---
+function renderInvoicingPage(): void {
+    invoicingEntityList.innerHTML = '';
+    if (invoicingEntities.length === 0) {
+        invoicingEntityList.innerHTML = '<p>No invoicing entities have been added yet.</p>';
+        return;
+    }
+
+    const sortedEntities = [...invoicingEntities].sort((a, b) => a.name.localeCompare(b.name));
+
+    sortedEntities.forEach(entity => {
+        const card = document.createElement('div');
+        card.className = 'invoicing-entity-card'; // Re-use styling
+
+        const addressHtml = entity.address ? `<div class="address-field"><strong>Address:</strong><br>${entity.address.replace(/\n/g, '<br>')}</div>` : '';
+        const invoiceStatusOptions: InvoiceStatus[] = ['Out for review', 'Paid', 'Hold', 'Returned', 'Declined', 'Other'];
+
+        // Calculate invoice total
+        const totalAmount = entity.invoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+        const formattedTotal = new Intl.NumberFormat(undefined, { style: 'currency', currency: projectInfo.currency || 'USD' }).format(totalAmount);
+
+        card.innerHTML = `
+            <div class="invoicing-entity-card-header">
+                <h4>${entity.name}</h4>
+                <div class="invoicing-entity-card-actions">
+                    <button class="edit-btn" data-id="${entity.id}" data-action="edit-entity">Edit</button>
+                    <button class="delete-btn-list" data-id="${entity.id}" data-action="delete-entity">Delete</button>
+                </div>
+            </div>
+            <div class="invoicing-entity-card-body">
+                ${entity.contactPerson ? `<div><strong>Contact:</strong> ${entity.contactPerson}</div>` : ''}
+                ${entity.email ? `<div><strong>Email:</strong> ${entity.email}</div>` : ''}
+                ${entity.phone ? `<div><strong>Phone:</strong> ${entity.phone}</div>` : ''}
+                ${addressHtml}
+            </div>
+            <div class="invoices-section">
+                <details class="add-invoice-details">
+                    <summary>Add New Invoice</summary>
+                    <form class="add-invoice-form" data-entity-id="${entity.id}">
+                        <div class="form-group">
+                            <label>Invoice Number</label>
+                            <input type="text" name="invoiceNumber" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Invoice Amount</label>
+                            <input type="number" name="invoiceAmount" min="0" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Invoice Date</label>
+                            <input type="date" name="invoiceDate" class="invoice-date-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Due Date</label>
+                            <input type="date" name="invoiceDueDate" class="invoice-date-input" required>
+                        </div>
+                        <div class="form-group form-group-full">
+                            <label>Description</label>
+                            <textarea name="invoiceDescription" rows="3"></textarea>
+                        </div>
+                        <div class="form-group form-group-full status-group">
+                            <label>Status</label>
+                            <select name="invoiceStatus" class="invoice-status-select">
+                                ${invoiceStatusOptions.map(s => `<option value="${s}">${s}</option>`).join('')}
+                            </select>
+                            <textarea name="invoiceOtherStatus" class="other-status-input" rows="2" placeholder="Specify other status..." style="display: none; margin-top: 0.5rem;"></textarea>
+                        </div>
+                        <button type="submit" class="save-btn">Save Invoice</button>
+                    </form>
+                </details>
+                <div class="invoices-list">
+                    <h3>Invoices</h3>
+                    ${entity.invoices.length > 0 ? `
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Inv #</th>
+                                        <th>Date</th>
+                                        <th>Due</th>
+                                        <th>Amount</th>
+                                        <th>Status</th>
+                                        <th style="width: 30%;">Description</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${entity.invoices.map(inv => `
+                                        <tr>
+                                            <td>${inv.invoiceNumber}</td>
+                                            <td>${inv.invoiceDate}</td>
+                                            <td>${inv.dueDate}</td>
+                                            <td>${new Intl.NumberFormat(undefined, { style: 'currency', currency: projectInfo.currency || 'USD' }).format(inv.amount)}</td>
+                                            <td>${inv.status === 'Other' ? inv.otherStatus : inv.status}</td>
+                                            <td><p style="white-space: pre-wrap; word-break: break-word;">${inv.description}</p></td>
+                                            <td class="action-cell">
+                                                <button class="edit-btn" data-id="${inv.id}" data-entity-id="${entity.id}" data-action="edit-invoice">Edit</button>
+                                                <button class="delete-btn-list" data-id="${inv.id}" data-entity-id="${entity.id}" data-action="delete-invoice">Delete</button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : '<p>No invoices added for this entity.</p>'}
+                </div>
+            </div>
+            <div class="invoicing-entity-card-footer">
+                <strong>Total Invoiced:</strong>
+                <span>${formattedTotal}</span>
+            </div>
+        `;
+        invoicingEntityList.appendChild(card);
+    });
+
+    // Re-initialize date pickers for any new forms
+    flatpickr('.invoice-date-input', {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "M j, Y",
+        disableMobile: true,
+    });
+}
+
+
+function addInvoicingEntity(): void {
+    const name = invoicingEntityNameInput.value.trim();
+    if (!name) {
+        alert("Entity Name is required.");
+        return;
+    }
+    const newEntity: InvoicingEntity = {
+        id: nextInvoicingEntityId++,
+        name,
+        contactPerson: invoicingEntityContactPersonInput.value.trim(),
+        email: invoicingEntityEmailInput.value.trim(),
+        phone: invoicingEntityPhoneInput.value.trim(),
+        address: invoicingEntityAddressTextarea.value.trim(),
+        invoices: [],
+    };
+    invoicingEntities.push(newEntity);
+    renderInvoicingPage();
+    addInvoicingEntityForm.reset();
+}
+
+function deleteInvoicingEntity(id: number): void {
+    const entity = invoicingEntities.find(e => e.id === id);
+    if (!entity) return;
+
+    showConfirmation(
+        `Are you sure you want to delete the entity "${entity.name}"? This action cannot be undone.`,
+        () => {
+            invoicingEntities = invoicingEntities.filter(e => e.id !== id);
+            renderInvoicingPage();
+        }
+    );
+}
+
+function openEditInvoicingEntityModal(id: number): void {
+    const entity = invoicingEntities.find(e => e.id === id);
+    if (!entity) return;
+
+    editingInvoicingEntityId = id;
+    editInvoicingEntityNameInput.value = entity.name;
+    editInvoicingEntityContactPersonInput.value = entity.contactPerson || '';
+    editInvoicingEntityEmailInput.value = entity.email || '';
+    editInvoicingEntityPhoneInput.value = entity.phone || '';
+    editInvoicingEntityAddressTextarea.value = entity.address || '';
+    
+    editInvoicingEntityModal.style.display = 'flex';
+}
+
+function closeEditInvoicingEntityModal(): void {
+    editInvoicingEntityModal.style.display = 'none';
+    editingInvoicingEntityId = null;
+}
+
+function handleUpdateInvoicingEntity(): void {
+    if (editingInvoicingEntityId === null) return;
+    const name = editInvoicingEntityNameInput.value.trim();
+    if (!name) {
+        alert("Entity Name is required.");
+        return;
+    }
+    const entityIndex = invoicingEntities.findIndex(e => e.id === editingInvoicingEntityId);
+    if (entityIndex > -1) {
+        invoicingEntities[entityIndex] = {
+            ...invoicingEntities[entityIndex], // Preserve invoices array
+            name,
+            contactPerson: editInvoicingEntityContactPersonInput.value.trim(),
+            email: editInvoicingEntityEmailInput.value.trim(),
+            phone: editInvoicingEntityPhoneInput.value.trim(),
+            address: editInvoicingEntityAddressTextarea.value.trim(),
+        };
+        renderInvoicingPage();
+    }
+    closeEditInvoicingEntityModal();
+}
+
+function addInvoice(entityId: number, form: HTMLFormElement): void {
+    const entity = invoicingEntities.find(e => e.id === entityId);
+    if (!entity) return;
+
+    const formData = new FormData(form);
+    const invoiceStatus = formData.get('invoiceStatus') as InvoiceStatus;
+    
+    const newInvoice: Invoice = {
+        id: nextInvoiceId++,
+        invoiceNumber: formData.get('invoiceNumber') as string,
+        invoiceDate: formData.get('invoiceDate') as string,
+        dueDate: formData.get('invoiceDueDate') as string,
+        description: formData.get('invoiceDescription') as string,
+        amount: parseFloat(formData.get('invoiceAmount') as string),
+        status: invoiceStatus,
+        otherStatus: invoiceStatus === 'Other' ? formData.get('invoiceOtherStatus') as string : undefined,
+    };
+    
+    entity.invoices.push(newInvoice);
+    renderInvoicingPage();
+}
+
+function deleteInvoice(entityId: number, invoiceId: number): void {
+    const entity = invoicingEntities.find(e => e.id === entityId);
+    if (!entity) return;
+
+    showConfirmation("Are you sure you want to delete this invoice?", () => {
+        entity.invoices = entity.invoices.filter(inv => inv.id !== invoiceId);
+        renderInvoicingPage();
+    });
+}
+
+function openEditInvoiceModal(entityId: number, invoiceId: number): void {
+    const entity = invoicingEntities.find(e => e.id === entityId);
+    const invoice = entity?.invoices.find(inv => inv.id === invoiceId);
+    if (!invoice) return;
+
+    editingInvoiceDetails = { entityId, invoiceId };
+
+    editInvoiceNumberInput.value = invoice.invoiceNumber;
+    editInvoiceAmountInput.value = String(invoice.amount);
+    editInvoiceDescriptionTextarea.value = invoice.description;
+
+    flatpickrInstances['edit-invoice-date']?.setDate(invoice.invoiceDate, false);
+    flatpickrInstances['edit-invoice-due-date']?.setDate(invoice.dueDate, false);
+
+    const invoiceStatusOptions: InvoiceStatus[] = ['Out for review', 'Paid', 'Hold', 'Returned', 'Declined', 'Other'];
+    editInvoiceStatusSelect.innerHTML = invoiceStatusOptions.map(s => `<option value="${s}">${s}</option>`).join('');
+    editInvoiceStatusSelect.value = invoice.status;
+
+    const showOther = invoice.status === 'Other';
+    editInvoiceOtherStatusTextarea.style.display = showOther ? 'block' : 'none';
+    editInvoiceOtherStatusTextarea.value = showOther ? invoice.otherStatus || '' : '';
+
+    editInvoiceModal.style.display = 'flex';
+}
+
+function closeEditInvoiceModal(): void {
+    editInvoiceModal.style.display = 'none';
+    editingInvoiceDetails = null;
+}
+
+function handleUpdateInvoice(): void {
+    if (!editingInvoiceDetails) return;
+
+    const { entityId, invoiceId } = editingInvoiceDetails;
+    const entity = invoicingEntities.find(e => e.id === entityId);
+    const invoiceIndex = entity?.invoices.findIndex(inv => inv.id === invoiceId);
+
+    if (!entity || invoiceIndex === undefined || invoiceIndex < 0) return;
+
+    const newStatus = editInvoiceStatusSelect.value as InvoiceStatus;
+    const newAmount = parseFloat(editInvoiceAmountInput.value);
+
+    if (isNaN(newAmount)) {
+        alert("Please enter a valid amount.");
+        return;
+    }
+
+    entity.invoices[invoiceIndex] = {
+        ...entity.invoices[invoiceIndex],
+        invoiceNumber: editInvoiceNumberInput.value,
+        amount: newAmount,
+        invoiceDate: editInvoiceDateInput.value,
+        dueDate: editInvoiceDueDateInput.value,
+        description: editInvoiceDescriptionTextarea.value,
+        status: newStatus,
+        otherStatus: newStatus === 'Other' ? editInvoiceOtherStatusTextarea.value : undefined,
+    };
+
+    renderInvoicingPage();
+    closeEditInvoiceModal();
+}
 
 /**
  * Renders the entire application UI.
@@ -1922,9 +2284,12 @@ function getProjectStateObject(): ProjectState {
         meetingMinutes,
         actionItems,
         previousReports,
+        invoicingEntities,
         nextMeetingMinuteId,
         nextActionItemId,
         nextPreviousReportId,
+        nextInvoicingEntityId,
+        nextInvoiceId,
         nextTaskId,
         expandedTaskIds: Array.from(expandedTaskIds),
         currentView,
@@ -1952,10 +2317,16 @@ function applyState(state: Partial<ProjectState>): void {
     meetingMinutes = state.meetingMinutes || [];
     actionItems = state.actionItems || [];
     previousReports = state.previousReports || [];
+    invoicingEntities = state.invoicingEntities || [];
+    // Ensure invoices array exists on each entity for backward compatibility
+    invoicingEntities.forEach(e => { e.invoices = e.invoices || []; });
+
     nextMeetingMinuteId = state.nextMeetingMinuteId || 1;
     nextActionItemId = state.nextActionItemId || 1;
     nextPreviousReportId = state.nextPreviousReportId || 1;
-    nextTaskId = state.nextTaskId || 1;
+    nextInvoicingEntityId = state.nextInvoicingEntityId || 1;
+    nextInvoiceId = state.nextInvoiceId || 1;
+    nextTaskId = state.nextTaskId || (Math.max(0, ...tasks.map(t => t.id)) + 1);
     expandedTaskIds = new Set(state.expandedTaskIds || []);
     currentView = state.currentView || 'day';
     showBaseline = state.showBaseline || false;
@@ -2070,10 +2441,13 @@ function handleNewProject(): void {
     meetingMinutes = [];
     actionItems = [];
     previousReports = [];
+    invoicingEntities = [];
     nextTaskId = 1;
     nextMeetingMinuteId = 1;
     nextActionItemId = 1;
     nextPreviousReportId = 1;
+    nextInvoicingEntityId = 1;
+    nextInvoiceId = 1;
     editingTaskId = null;
     expandedTaskIds.clear();
     showBaseline = false;
@@ -3413,6 +3787,9 @@ tabNavigation.addEventListener('click', (e) => {
         if (tabId === 'action-items') {
             renderActionItemsPage();
         }
+        if (tabId === 'invoices') {
+            renderInvoicingPage();
+        }
         if (tabId === 'previous-reports') {
             renderPreviousReportsPage();
         }
@@ -3551,6 +3928,87 @@ previousReportsList.addEventListener('click', (e) => {
     }
 });
 
+// Invoicing Listeners
+addInvoicingEntityForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    addInvoicingEntity();
+});
+invoicingEntityList.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    if (form.matches('.add-invoice-form')) {
+        const entityId = parseInt(form.dataset.entityId!, 10);
+        addInvoice(entityId, form);
+    }
+});
+invoicingEntityList.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const action = target.dataset.action;
+    if (!action) return;
+
+    const entityId = parseInt(target.dataset.entityId! || target.dataset.id!, 10);
+    const invoiceId = parseInt(target.dataset.id!, 10);
+
+    if (!entityId) return;
+
+    switch(action) {
+        case 'edit-entity':
+            openEditInvoicingEntityModal(entityId);
+            break;
+        case 'delete-entity':
+            deleteInvoicingEntity(entityId);
+            break;
+        case 'edit-invoice':
+            if (invoiceId) {
+                openEditInvoiceModal(entityId, invoiceId);
+            }
+            break;
+        case 'delete-invoice':
+            if (invoiceId) {
+                deleteInvoice(entityId, invoiceId);
+            }
+            break;
+    }
+});
+invoicingEntityList.addEventListener('change', (e) => {
+    const target = e.target as HTMLSelectElement;
+    if (target.matches('.invoice-status-select')) {
+        const otherStatusInput = target.parentElement?.querySelector('.other-status-input') as HTMLTextAreaElement;
+        if (otherStatusInput) {
+            otherStatusInput.style.display = target.value === 'Other' ? 'block' : 'none';
+        }
+    }
+});
+editInvoicingEntityForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    handleUpdateInvoicingEntity();
+});
+closeEditInvoicingEntityModalBtn.addEventListener('click', closeEditInvoicingEntityModal);
+deleteInvoicingEntityBtn.addEventListener('click', () => {
+    if (editingInvoicingEntityId !== null) {
+        const entity = invoicingEntities.find(e => e.id === editingInvoicingEntityId);
+        showConfirmation(
+            `Are you sure you want to delete the entity "${entity?.name}"?`,
+            () => {
+                deleteInvoicingEntity(editingInvoicingEntityId!);
+                closeEditInvoicingEntityModal();
+            }
+        );
+    }
+});
+
+// Edit Invoice Modal Listeners
+editInvoiceForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    handleUpdateInvoice();
+});
+closeEditInvoiceModalBtn.addEventListener('click', closeEditInvoiceModal);
+cancelEditInvoiceBtn.addEventListener('click', closeEditInvoiceModal);
+editInvoiceStatusSelect.addEventListener('change', () => {
+    editInvoiceOtherStatusTextarea.style.display = editInvoiceStatusSelect.value === 'Other' ? 'block' : 'none';
+});
+
+
 // Close modals/panels on outside click
 document.addEventListener('click', (e) => {
     if (e.target !== notificationBell && !notificationBell.contains(e.target as Node)) {
@@ -3567,6 +4025,12 @@ document.addEventListener('click', (e) => {
     }
     if (e.target === multipleSubtasksModal) {
         multipleSubtasksModal.style.display = 'none';
+    }
+    if (e.target === editInvoicingEntityModal) {
+        closeEditInvoicingEntityModal();
+    }
+    if (e.target === editInvoiceModal) {
+        closeEditInvoiceModal();
     }
 });
 
