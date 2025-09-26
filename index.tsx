@@ -4,6 +4,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
+import ChangeOrdersTab from "./tabs/changeOrders";
 // Add declarations for CDN libraries
 declare const jspdf: any;
 declare const html2canvas: any;
@@ -13,6 +14,7 @@ type ViewMode = 'day' | 'week' | 'month' | 'quarter' | 'year';
 type TaskStatus = 'On Track' | 'At Risk' | 'Delayed' | 'Complete';
 type ActionItemStatus = 'Not Started' | 'In Progress' | 'Complete';
 type InvoiceStatus = 'Out for review' | 'Paid' | 'Hold' | 'Returned' | 'Declined' | 'Other';
+type ApproverStatus = 'Pending' | 'Approved' | 'Rejected';
 
 interface Task {
     id: number;
@@ -91,6 +93,26 @@ interface Invoice {
     otherStatus?: string;
 }
 
+interface Approver {
+    name: string;
+    title: string;
+    company: string;
+    status: ApproverStatus;
+    approved: boolean;
+}
+
+interface ChangeOrder {
+    id: number;
+    name: string;
+    date: string;
+    amount: number;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    description: string;
+    scheduleImpact?: number;
+    comments?: string;
+    approvers?: Approver[];
+}
+
 interface InvoicingEntity {
     id: number;
     name: string;
@@ -110,11 +132,13 @@ interface ProjectState {
     actionItems: ActionItem[];
     previousReports: PreviousReport[];
     invoicingEntities: InvoicingEntity[];
+    changeOrders: ChangeOrder[];
     nextMeetingMinuteId: number;
     nextActionItemId: number;
     nextPreviousReportId: number;
     nextInvoicingEntityId: number;
     nextInvoiceId: number;
+    nextChangeOrderId: number;
     nextTaskId: number;
     expandedTaskIds: number[];
     currentView: ViewMode;
@@ -153,6 +177,7 @@ let meetingMinutes: MeetingMinute[] = [];
 let actionItems: ActionItem[] = [];
 let previousReports: PreviousReport[] = [];
 let invoicingEntities: InvoicingEntity[] = [];
+let changeOrders: ChangeOrder[] = [];
 // FIX: Updated the type of the notifications array to use the new AppNotification interface.
 let notifications: AppNotification[] = [];
 let nextTaskId = 1;
@@ -161,6 +186,7 @@ let nextActionItemId = 1;
 let nextPreviousReportId = 1;
 let nextInvoicingEntityId = 1;
 let nextInvoiceId = 1;
+let nextChangeOrderId = 1;
 let editingTaskId: number | null = null;
 let editingInvoicingEntityId: number | null = null;
 let editingInvoiceDetails: { entityId: number, invoiceId: number } | null = null;
@@ -2285,11 +2311,13 @@ function getProjectStateObject(): ProjectState {
         actionItems,
         previousReports,
         invoicingEntities,
+        changeOrders,
         nextMeetingMinuteId,
         nextActionItemId,
         nextPreviousReportId,
         nextInvoicingEntityId,
         nextInvoiceId,
+        nextChangeOrderId,
         nextTaskId,
         expandedTaskIds: Array.from(expandedTaskIds),
         currentView,
@@ -2318,6 +2346,7 @@ function applyState(state: Partial<ProjectState>): void {
     actionItems = state.actionItems || [];
     previousReports = state.previousReports || [];
     invoicingEntities = state.invoicingEntities || [];
+    changeOrders = state.changeOrders || [];
     // Ensure invoices array exists on each entity for backward compatibility
     invoicingEntities.forEach(e => { e.invoices = e.invoices || []; });
 
@@ -2326,6 +2355,7 @@ function applyState(state: Partial<ProjectState>): void {
     nextPreviousReportId = state.nextPreviousReportId || 1;
     nextInvoicingEntityId = state.nextInvoicingEntityId || 1;
     nextInvoiceId = state.nextInvoiceId || 1;
+    nextChangeOrderId = state.nextChangeOrderId || 1;
     nextTaskId = state.nextTaskId || (Math.max(0, ...tasks.map(t => t.id)) + 1);
     expandedTaskIds = new Set(state.expandedTaskIds || []);
     currentView = state.currentView || 'day';
@@ -2352,6 +2382,7 @@ function applyState(state: Partial<ProjectState>): void {
     renderCustomFieldsForm(addCustomFieldsContainer);
     renderColorCodeControls();
     render();
+    renderChangeOrdersTab();
     alert('Project loaded successfully.');
 }
 
@@ -2442,12 +2473,14 @@ function handleNewProject(): void {
     actionItems = [];
     previousReports = [];
     invoicingEntities = [];
+    changeOrders = [];
     nextTaskId = 1;
     nextMeetingMinuteId = 1;
     nextActionItemId = 1;
     nextPreviousReportId = 1;
     nextInvoicingEntityId = 1;
     nextInvoiceId = 1;
+    nextChangeOrderId = 1;
     editingTaskId = null;
     expandedTaskIds.clear();
     showBaseline = false;
@@ -2477,6 +2510,7 @@ function handleNewProject(): void {
     colorCodeSelect.value = 'status';
 
     render(); // Redraws everything and saves the new empty state
+    renderChangeOrdersTab();
 }
 
 // --- CUSTOM FIELDS ---
@@ -2987,7 +3021,30 @@ function generateReport(): void {
         }
     }
 
-    // 8. Meeting Minutes
+    // 8. Change Orders
+    const changeOrdersTable = reportPage.querySelector('#change-orders-table-report tbody') as HTMLTableSectionElement;
+    if (changeOrdersTable) {
+        changeOrdersTable.innerHTML = '';
+        if (changeOrders.length === 0) {
+            changeOrdersTable.innerHTML = '<tr><td colspan="5">No change orders recorded.</td></tr>';
+        } else {
+            const sortedChangeOrders = [...changeOrders].sort((a, b) => parseDateUTC(a.date).getTime() - parseDateUTC(b.date).getTime());
+            sortedChangeOrders.forEach(co => {
+                const formattedAmount = new Intl.NumberFormat(undefined, { style: 'currency', currency: projectInfo.currency || 'USD' }).format(co.amount);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${co.name}</td>
+                    <td>${co.description}</td>
+                    <td>${co.date}</td>
+                    <td>${formattedAmount}</td>
+                    <td>${co.status}</td>
+                `;
+                changeOrdersTable.appendChild(tr);
+            });
+        }
+    }
+
+    // 9. Meeting Minutes
     const reportMeetingMinutesList = document.getElementById('report-meeting-minutes-list');
     if (reportMeetingMinutesList) {
         reportMeetingMinutesList.innerHTML = '';
@@ -3333,6 +3390,25 @@ async function exportReportToPDF(): Promise<void> {
                 startY: currentY,
                 head: [['Action Item', 'Assigned To', 'Assigned By', 'Assigned', 'Due', 'Status']],
                 body: sortedItems.map(item => [item.what, item.assignedTo.join(', '), item.assignedBy, item.assignedDate, item.dueDate, item.status]),
+                theme: 'grid',
+                headStyles: { fillColor: [60, 70, 80] },
+                didDrawPage: (data: any) => { currentY = data.cursor.y + 5; },
+                margin: { left: MARGIN.LEFT, right: MARGIN.RIGHT }
+            });
+            currentY = (pdf as any).lastAutoTable.finalY + 10;
+        }
+
+        // --- Change Orders Section ---
+        if (changeOrders.length > 0) {
+            drawSectionTitle("Change Orders");
+            const sortedChangeOrders = [...changeOrders].sort((a, b) => parseDateUTC(a.date).getTime() - parseDateUTC(b.date).getTime());
+             (pdf as any).autoTable({
+                startY: currentY,
+                head: [['Name / Title', 'Description', 'Date', 'Amount', 'Status']],
+                body: sortedChangeOrders.map(co => {
+                    const formattedAmount = new Intl.NumberFormat(undefined, { style: 'currency', currency: projectInfo.currency || 'USD' }).format(co.amount);
+                    return [co.name, co.description, co.date, formattedAmount, co.status];
+                }),
                 theme: 'grid',
                 headStyles: { fillColor: [60, 70, 80] },
                 didDrawPage: (data: any) => { currentY = data.cursor.y + 5; },
@@ -3777,8 +3853,8 @@ tabNavigation.addEventListener('click', (e) => {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
         target.classList.add('active');
 
-        // Show/hide content
-        tabContents.forEach(content => {
+        // Show/hide content using a live query to include dynamically added tabs
+        document.querySelectorAll('.tab-content').forEach(content => {
             let contentId = '';
             if (content.id === 'gantt-view-container') contentId = 'plan';
             if (content.id === 'report-page') contentId = 'report';
@@ -3786,9 +3862,10 @@ tabNavigation.addEventListener('click', (e) => {
             if (content.id === 'meeting-minutes-page') contentId = 'minutes';
             if (content.id === 'action-items-page') contentId = 'action-items';
             if (content.id === 'invoices-page') contentId = 'invoices';
+            if (content.id === 'change-orders-page') contentId = 'change-orders';
             if (content.id === 'previous-reports-page') contentId = 'previous-reports';
             
-            content.style.display = contentId === tabId ? 'block' : 'none';
+            (content as HTMLElement).style.display = contentId === tabId ? 'block' : 'none';
         });
         
         if (tabId === 'report') {
@@ -4047,8 +4124,58 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// --- CHANGE ORDERS ---
+function handleAddChangeOrder(data: Omit<ChangeOrder, 'id'>) {
+    changeOrders.push({ id: nextChangeOrderId++, ...data });
+    renderChangeOrdersTab();
+}
+
+function handleUpdateChangeOrder(data: ChangeOrder) {
+    const index = changeOrders.findIndex(co => co.id === data.id);
+    if (index > -1) {
+        changeOrders[index] = data;
+    }
+    renderChangeOrdersTab();
+}
+
+function handleDeleteChangeOrder(id: number) {
+    changeOrders = changeOrders.filter(co => co.id !== id);
+    renderChangeOrdersTab();
+}
+
+function renderChangeOrdersTab() {
+    const changeOrdersPage = document.getElementById('change-orders-page');
+    if (changeOrdersPage) {
+        changeOrdersPage.innerHTML = ''; // Clear old content and listeners
+        const component = ChangeOrdersTab({
+            changeOrders: changeOrders,
+            onAdd: handleAddChangeOrder,
+            onUpdate: handleUpdateChangeOrder,
+            onDelete: handleDeleteChangeOrder,
+        });
+        changeOrdersPage.appendChild(component);
+        // Initialize flatpickr on the new date input
+        flatpickr(component.querySelector('#change-order-date'), {
+            dateFormat: "Y-m-d",
+            altInput: true,
+            altFormat: "M j, Y",
+            disableMobile: true,
+        });
+    }
+}
+
+
+/**
+ * Populates the Change Orders tab content area with its component.
+ * This function assumes the tab button and content div are already in the HTML.
+ */
+function initializeDynamicTabs() {
+    renderChangeOrdersTab();
+}
+
 
 // Initial Load
+initializeDynamicTabs();
 toggleSubtaskFields(); // Set initial form state
 loadState();
 document.querySelector(`.view-btn[data-view="${currentView}"]`)?.classList.add('active');
